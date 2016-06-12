@@ -28,6 +28,7 @@ import assets from './assets'; // eslint-disable-line import/no-unresolved
 import { port, auth, analytics, locales } from './config';
 import configureStore from './store/configureStore';
 import { setRuntimeVariable } from './actions/runtime';
+import { fetchContent } from './actions/pages';
 import Provide from './components/Provide';
 import { setLocale } from './actions/intl';
 import fetch from './core/fetch';
@@ -125,7 +126,7 @@ app.get('/login/facebook/return',
     });
     res.cookie('id_token', token, {
       maxAge: 1000 * expiresIn,
-      httpOnly: true
+      httpOnly: true,
     });
     res.redirect('/');
   }
@@ -189,6 +190,8 @@ app.get('*', async(req, res, next) => {
     await store.dispatch(setLocale({
       locale,
     }));
+    
+    await store.dispatch(fetchContent());
 
     await match(routes, {
       path: req.path,
