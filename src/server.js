@@ -34,17 +34,15 @@ import { setLocale } from './actions/intl';
 import fetch from './core/fetch';
 import mongoose from 'mongoose';
 import Page from './data/models/Page';
+import secrets from '../secrets.json';
 
-
-mongoose.connect('mongodb://test:test@ds011462.mlab.com:11462/mksony', {
-  authdb: 'mksony',
-});
+mongoose.connect('mongodb://localhost/max2');
 const db = mongoose.connection;
 db.on('error', console.error.bind(console, 'connection error:')); // eslint-disable-line no-console
 async function saveContentToDB() {
   let content;
   try {
-    const cosmicContent = await fetch('https://api.cosmicjs.com/v1/mksony/objects?read_key=jW0G8yHJtbCRUuYn6cV1MjRSbaw8ilsexClcONKoV0tBeCeZ3u');
+    const cosmicContent = await fetch(`https://api.cosmicjs.com/v1/mksony/objects?read_key=${secrets.COSMIC_JS_API_KEY}`);
     const data = await cosmicContent.json();
     content = await data.objects;
     const bulk = Page.collection.initializeUnorderedBulkOp();
@@ -142,9 +140,9 @@ app.use('/graphql', expressGraphQL(req => ({
   },
   pretty: process.env.NODE_ENV !== 'production',
 })));
-//Remove trailing slashes, TODO maybe move to custom middleware
+// Remove trailing slashes, TODO maybe move to custom middleware
 app.use((req, res, next) => {
-  if (req.path.substr(-1) == '/' && req.path.length > 1) {
+  if (req.path.substr(-1) === '/' && req.path.length > 1) {
     const query = req.url.slice(req.path.length);
     res.redirect(301, `${req.path.slice(0, -1)}${query}`);
   } else {
@@ -158,7 +156,7 @@ app.get('*', async(req, res, next) => {
   try {
     let css = [];
     let statusCode = 200;
-    //template is a function provided by webpack jade loader
+    // template is a function provided by webpack jade loader
     const template = require('./views/index.jade'); // eslint-disable-line global-require
     const locale = req.language;
     const data = {
@@ -189,7 +187,7 @@ app.get('*', async(req, res, next) => {
     await store.dispatch(setLocale({
       locale,
     }));
-    
+
     await store.dispatch(fetchContent());
 
     await UniversalRouter.resolve(routes, {
@@ -208,7 +206,7 @@ app.get('*', async(req, res, next) => {
         statusCode = status;
 
         // Fire all componentWill... hooks
-        data.body = ReactDOM.renderToString(<Provide store={ store }>{ component }</Provide>);
+        data.body = ReactDOM.renderToString(<Provide store={store}>{component}</Provide>);
 
         // If you have async actions, wait for store when stabilizes here.
         // This may be asynchronous loop if you have complicated structure.
