@@ -49,8 +49,7 @@ async function saveContentToDB() {
     content = await data.objects;
     const bulk = Page.collection.initializeUnorderedBulkOp();
     for (const it of content) {
-      bulk
-        .find({ _id: it._id }) // eslint-disable-line no-underscore-dangle
+      bulk.find({ _id: it._id }) // eslint-disable-line no-underscore-dangle
         .upsert()
         .update({ $set: it });
     }

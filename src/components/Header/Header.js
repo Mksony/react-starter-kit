@@ -15,6 +15,7 @@ import Link from '../Link';
 import Navigation from '../Navigation';
 import LanguageSwitcher from '../LanguageSwitcher';
 import logoUrl from './logo-small.png';
+import FullPageSlide from '../layout/FullPageSlide/FullPageSlide';
 
 const messages = defineMessages({
   brand: {
@@ -36,7 +37,7 @@ const messages = defineMessages({
 
 function Header() {
   return (
-    <div className={s.root}>
+    <FullPageSlide>
       <div className={s.container}>
         <Navigation className={s.nav} />
         <Link className={s.brand} to="/">
@@ -53,7 +54,7 @@ function Header() {
           <FormattedMessage tagName="p" {...messages.bannerDesc} />
         </div>
       </div>
-    </div>
+    </FullPageSlide>
   );
 }
 

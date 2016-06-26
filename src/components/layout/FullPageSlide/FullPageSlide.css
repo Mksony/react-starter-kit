@@ -1,0 +1,11 @@
+.root {
+  height: 100vh;
+  background-color: #3b5998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.container {
+  padding: 20% 0;
+}
+
