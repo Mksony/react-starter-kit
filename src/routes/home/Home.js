@@ -10,19 +10,28 @@
 import React, { PropTypes } from 'react';
 import withStyles from 'isomorphic-style-loader/lib/withStyles';
 import s from './Home.css';
+import { FormattedRelative } from 'react-intl';
+import { connect } from 'react-redux';
 
 const title = 'React Starter Kit';
 
-function Home({ news }, context) {
+function Home({ news, pages }, context) {
   context.setTitle(title);
   return (
     <div className={s.root}>
       <div className={s.container}>
         <h1 className={s.title}>React.js News</h1>
+        {pages.map((page, index) => <pre key={index}>{page.slug}<br />{page.content}</pre>)}
         <ul className={s.news}>
           {news.map((item, index) => (
             <li key={index} className={s.newsItem}>
-              <a href={item.link} className={s.newsTitle}>{item.title}</a>
+              <span className={s.newsTitle}>
+                <a href={item.link}>{item.title}</a>
+                {' '}
+                <span className={s.publishedDate}>
+                  <FormattedRelative value={item.publishedDate} />
+                </span>
+              </span>
               <span
                 className={s.newsDesc}
                 dangerouslySetInnerHTML={{ __html: item.contentSnippet }}
@@ -41,7 +50,12 @@ Home.propTypes = {
     link: PropTypes.string.isRequired,
     contentSnippet: PropTypes.string,
   })).isRequired,
+  pages: PropTypes.array.isRequired,
 };
 Home.contextTypes = { setTitle: PropTypes.func.isRequired };
 
-export default withStyles(s)(Home);
+const mapStateToProps = (state) => ({
+  pages: state.pages.pages,
+});
+
+export default withStyles(s)(connect(mapStateToProps)(Home));

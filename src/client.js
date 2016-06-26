@@ -8,6 +8,7 @@
  */
 
 import 'babel-polyfill';
+import React from 'react';
 import ReactDOM from 'react-dom';
 import FastClick from 'fastclick';
 import UniversalRouter from 'universal-router';
@@ -20,8 +21,16 @@ import {
   windowScrollX,
   windowScrollY,
 } from './core/DOMUtils';
+import configureStore from './store/configureStore';
+import Provide from './components/Provide';
+import { addLocaleData } from 'react-intl';
+import en from 'react-intl/locale-data/en';
+import cs from 'react-intl/locale-data/cs';
+
+[en, cs].forEach(addLocaleData);
 
 const context = {
+  store: null,
   insertCss: (...styles) => {
     const removeCss = styles.map(style => style._insertCss()); // eslint-disable-line no-underscore-dangle, max-len
     return () => {
@@ -71,11 +80,20 @@ let renderComplete = (state, callback) => {
   };
 };
 
-function render(container, state, component) {
+function render(container, state, config, component) {
   return new Promise((resolve, reject) => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log(// eslint-disable-line no-console
+        'React rendering. State:',
+        config.store.getState()
+      );
+    }
+
     try {
       ReactDOM.render(
-        component,
+        <Provide {...config}>
+          {component}
+        </Provide>,
         container,
         renderComplete.bind(undefined, state, resolve)
       );
@@ -87,10 +105,19 @@ function render(container, state, component) {
 
 function run() {
   const container = document.getElementById('app');
+  const initialState = JSON.parse(
+    document.
+      getElementById('source').
+      getAttribute('data-initial-state')
+  );
   let currentLocation = history.getCurrentLocation();
+
 
   // Make taps on links and buttons work fast on mobiles
   FastClick.attach(document.body);
+
+  const store = configureStore(initialState);
+  context.store = store;
 
   // Re-render the app when window.location changes
   function onLocationChange(location) {
@@ -109,7 +136,7 @@ function run() {
       query: location.query,
       state: location.state,
       context,
-      render: render.bind(undefined, container, location.state),
+      render: render.bind(undefined, container, location.state, { store }),
     }).catch(err => console.error(err)); // eslint-disable-line no-console
   }
 

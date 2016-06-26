@@ -15,14 +15,18 @@ import {
 import me from './queries/me';
 import content from './queries/content';
 import news from './queries/news';
+import intl from './queries/intl';
+import page from './queries/page';
 
 const schema = new Schema({
   query: new ObjectType({
-    name: 'Query',
+    name: 'RootQuery',
     fields: {
       me,
       content,
       news,
+      intl,
+      page,
     },
   }),
 });

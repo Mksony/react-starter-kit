@@ -8,23 +8,62 @@
  */
 
 import 'babel-polyfill';
+import './serverIntlPolyfill';
 import path from 'path';
 import express from 'express';
 import cookieParser from 'cookie-parser';
+import requestLanguage from 'express-request-language';
 import bodyParser from 'body-parser';
 import expressJwt from 'express-jwt';
 import expressGraphQL from 'express-graphql';
 import jwt from 'jsonwebtoken';
+import React from 'react';
 import ReactDOM from 'react-dom/server';
 import UniversalRouter from 'universal-router';
 import PrettyError from 'pretty-error';
 import passport from './core/passport';
-import models from './data/models';
 import schema from './data/schema';
 import routes from './routes';
 import assets from './assets'; // eslint-disable-line import/no-unresolved
-import { port, auth, analytics } from './config';
+import { port, auth, analytics, locales } from './config';
+import configureStore from './store/configureStore';
+import { setRuntimeVariable } from './actions/runtime';
+import { fetchContent } from './actions/pages';
+import Provide from './components/Provide';
+import { setLocale } from './actions/intl';
+import fetch from './core/fetch';
+import mongoose from 'mongoose';
+import Page from './data/models/Page';
 
+
+mongoose.connect('mongodb://test:test@ds011462.mlab.com:11462/mksony', {
+  authdb: 'mksony',
+});
+const db = mongoose.connection;
+db.on('error', console.error.bind(console, 'connection error:')); // eslint-disable-line no-console
+async function saveContentToDB() {
+  let content;
+  try {
+    const cosmicContent = await fetch('https://api.cosmicjs.com/v1/mksony/objects?read_key=jW0G8yHJtbCRUuYn6cV1MjRSbaw8ilsexClcONKoV0tBeCeZ3u');
+    const data = await cosmicContent.json();
+    content = await data.objects;
+    const bulk = Page.collection.initializeUnorderedBulkOp();
+    for (const it of content) {
+      bulk.find({ _id: it._id }) // eslint-disable-line no-underscore-dangle
+        .upsert()
+        .update({ $set: it });
+    }
+    bulk.execute();
+  } catch (e) {
+    console.log(e); // eslint-disable-line no-console
+  }
+  return true;
+}
+db.once('open', () => {
+  console.log('connected to database'); // eslint-disable-line no-console
+});
+// TODO uncomment to sync data from cms
+// saveContentToDB();
 const app = express();
 
 //
@@ -39,7 +78,21 @@ global.navigator.userAgent = global.navigator.userAgent || 'all';
 // -----------------------------------------------------------------------------
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(cookieParser());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(requestLanguage({
+  languages: locales,
+  queryName: 'lang',
+  cookie: {
+    name: 'lang',
+    options: {
+      path: '/',
+      maxAge: 3650 * 24 * 3600 * 1000, // 10 years in miliseconds
+    },
+    url: '/lang/{language}',
+  },
+}));
+app.use(bodyParser.urlencoded({
+  extended: true,
+}));
 app.use(bodyParser.json());
 
 //
@@ -55,14 +108,25 @@ app.use(expressJwt({
 app.use(passport.initialize());
 
 app.get('/login/facebook',
-  passport.authenticate('facebook', { scope: ['email', 'user_location'], session: false })
+  passport.authenticate('facebook', {
+    scope: ['email', 'user_location'],
+    session: false,
+  })
 );
 app.get('/login/facebook/return',
-  passport.authenticate('facebook', { failureRedirect: '/login', session: false }),
+  passport.authenticate('facebook', {
+    failureRedirect: '/login',
+    session: false
+  }),
   (req, res) => {
     const expiresIn = 60 * 60 * 24 * 180; // 180 days
-    const token = jwt.sign(req.user, auth.jwt.secret, { expiresIn });
-    res.cookie('id_token', token, { maxAge: 1000 * expiresIn, httpOnly: true });
+    const token = jwt.sign(req.user, auth.jwt.secret, {
+      expiresIn
+    });
+    res.cookie('id_token', token, {
+      maxAge: 1000 * expiresIn,
+      httpOnly: true,
+    });
     res.redirect('/');
   }
 );
@@ -73,23 +137,60 @@ app.get('/login/facebook/return',
 app.use('/graphql', expressGraphQL(req => ({
   schema,
   graphiql: true,
-  rootValue: { request: req },
+  rootValue: {
+    request: req
+  },
   pretty: process.env.NODE_ENV !== 'production',
 })));
+//Remove trailing slashes, TODO maybe move to custom middleware
+app.use((req, res, next) => {
+  if (req.path.substr(-1) == '/' && req.path.length > 1) {
+    const query = req.url.slice(req.path.length);
+    res.redirect(301, `${req.path.slice(0, -1)}${query}`);
+  } else {
+    next();
+  }
+});
 
-//
 // Register server-side rendering middleware
 // -----------------------------------------------------------------------------
-app.get('*', async (req, res, next) => {
+app.get('*', async(req, res, next) => {
   try {
     let css = [];
     let statusCode = 200;
+    //template is a function provided by webpack jade loader
     const template = require('./views/index.jade'); // eslint-disable-line global-require
-    const data = { title: '', description: '', css: '', body: '', entry: assets.main.js };
+    const locale = req.language;
+    const data = {
+      lang: locale,
+      title: '',
+      description: '',
+      css: '',
+      body: '',
+      entry: assets.main.js,
+    };
 
     if (process.env.NODE_ENV === 'production') {
       data.trackingId = analytics.google.trackingId;
     }
+
+    const store = configureStore({});
+
+    store.dispatch(setRuntimeVariable({
+      name: 'initialNow',
+      value: Date.now(),
+    }));
+
+    store.dispatch(setRuntimeVariable({
+      name: 'availableLocales',
+      value: locales,
+    }));
+
+    await store.dispatch(setLocale({
+      locale,
+    }));
+    
+    await store.dispatch(fetchContent());
 
     await UniversalRouter.resolve(routes, {
       path: req.path,
@@ -98,13 +199,28 @@ app.get('*', async (req, res, next) => {
         insertCss: (...styles) => {
           styles.forEach(style => css.push(style._getCss())); // eslint-disable-line no-underscore-dangle, max-len
         },
+
         setTitle: value => (data.title = value),
         setMeta: (key, value) => (data[key] = value),
       },
       render(component, status = 200) {
         css = [];
         statusCode = status;
-        data.body = ReactDOM.renderToString(component);
+
+        // Fire all componentWill... hooks
+        data.body = ReactDOM.renderToString(<Provide store={ store }>{ component }</Provide>);
+
+        // If you have async actions, wait for store when stabilizes here.
+        // This may be asynchronous loop if you have complicated structure.
+        // Then render again
+
+        // If store has no changes, you do not need render again!
+        // data.body = ReactDOM.renderToString(<Provide store={store}>{component}</Provide>);
+
+        // It is important to have rendered output and state in sync,
+        // otherwise React will write error to console when mounting on client
+        data.state = JSON.stringify(store.getState());
+
         data.css = css.join('');
         return true;
       },
@@ -139,9 +255,7 @@ app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
 // Launch the server
 // -----------------------------------------------------------------------------
 /* eslint-disable no-console */
-models.sync().catch(err => console.error(err.stack)).then(() => {
-  app.listen(port, () => {
-    console.log(`The server is running at http://localhost:${port}/`);
-  });
+app.listen(port, () => {
+  console.log(`The server is running at http://localhost:${port}/`);
 });
 /* eslint-enable no-console */
